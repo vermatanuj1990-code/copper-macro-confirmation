@@ -38,7 +38,9 @@ usd_inr_score = np.clip(usd_inr_change / 0.005, -1, 1)
 # Volatility Regime (Copper)
 # -------------------------------
 returns = copper["Close"].pct_change().dropna()
-volatility = returns.rolling(10).std().iloc[-1]
+
+volatility_series = returns.rolling(10).std()
+volatility = float(volatility_series.iloc[-1])
 
 if volatility > 0.025:
     vol_regime = "High"
