@@ -17,8 +17,8 @@ st.caption("USD-INR + Volatility impact | Global → India translation")
 # --------------------------------------------
 @st.cache_data(ttl=3600)
 def fetch_data():
-    copper = yf.download("HG=F", period="60d", progress=False)
-    usdinr = yf.download("INR=X", period="60d", progress=False)
+copper = yf.download("HG=F", period="6mo", progress=False)
+usdinr = yf.download("INR=X", period="6mo", progress=False)
     return copper, usdinr
 
 copper, usdinr = fetch_data()
