@@ -20,7 +20,7 @@ def fetch_data():
 
 usdinr, copper = fetch_data()
 
-if len(usdinr) < 20 or len(copper) < 20:
+if len(usdinr) < 15 or len(copper) < 15:
     st.error("Not enough market data yet.")
     st.stop()
 
