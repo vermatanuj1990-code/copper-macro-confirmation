@@ -1,7 +1,7 @@
-# =========================================================
-# COPPER MACRO CONFIRMATION MODEL – STEP 1
-# USD–INR + VOLATILITY
-# =========================================================
+# ============================================
+# COPPER MACRO CONFIRMATION – STEP 1
+# USD-INR + Volatility Impact
+# ============================================
 
 import streamlit as st
 import yfinance as yf
@@ -10,37 +10,48 @@ import numpy as np
 st.set_page_config(page_title="Copper Macro – Step 1", layout="centered")
 
 st.title("🌍 Copper Macro Confirmation – Step 1")
-st.caption("USD–INR + Volatility impact | Global to India translation")
+st.caption("USD-INR + Volatility impact | Global → India translation")
 
+# --------------------------------------------
+# Data Fetch
+# --------------------------------------------
 @st.cache_data(ttl=3600)
 def fetch_data():
-    usdinr = yf.download("USDINR=X", period="60d")
-    copper = yf.download("HG=F", period="60d")
-    return usdinr, copper
+    copper = yf.download("HG=F", period="60d", progress=False)
+    usdinr = yf.download("INR=X", period="60d", progress=False)
+    return copper, usdinr
 
-usdinr, copper = fetch_data()
+copper, usdinr = fetch_data()
 
-if len(usdinr) < 15 or len(copper) < 15:
+# --------------------------------------------
+# Data Validation
+# --------------------------------------------
+if copper.empty or usdinr.empty or len(copper) < 20 or len(usdinr) < 20:
     st.error("Not enough market data yet.")
     st.stop()
 
-# -------------------------------
-# USD–INR Trend
-# -------------------------------
-inr_now = usdinr["Close"].iloc[-1]
-inr_prev = usdinr["Close"].iloc[-6]
+# --------------------------------------------
+# USD-INR Impact
+# --------------------------------------------
+inr_now = float(usdinr["Close"].iloc[-1])
+inr_prev = float(usdinr["Close"].iloc[-6])
+
 usd_inr_change = (inr_now - inr_prev) / inr_prev
 
-# INR weakening = bullish MCX
-usd_inr_score = np.clip(usd_inr_change / 0.005, -1, 1)
+# INR weakening = bullish MCX copper
+usd_inr_score = np.clip(usd_inr_change / 0.01, -1, 1)
+usd_inr_score = float(usd_inr_score)
 
-# -------------------------------
-# Volatility Regime (Copper)
-# -------------------------------
+# --------------------------------------------
+# Copper Volatility Regime
+# --------------------------------------------
 returns = copper["Close"].pct_change().dropna()
 
-volatility_series = returns.rolling(10).std()
-volatility = float(volatility_series.iloc[-1])
+if len(returns) < 10:
+    st.error("Not enough data for volatility calculation.")
+    st.stop()
+
+volatility = float(returns.rolling(10).std().iloc[-1])
 
 if volatility > 0.025:
     vol_regime = "High"
@@ -52,50 +63,38 @@ else:
     vol_regime = "Low"
     vol_score = 0.1
 
-# -------------------------------
-# Final Macro Confirmation Score
-# -------------------------------
-macro_score = (
-    0.7 * usd_inr_score +
-    0.3 * vol_score
-)
-
+# --------------------------------------------
+# Final Macro Score
+# --------------------------------------------
+macro_score = 0.7 * usd_inr_score + 0.3 * vol_score
 macro_score = float(np.clip(macro_score, -1, 1))
 
-# -------------------------------
+# --------------------------------------------
 # Interpretation
-# -------------------------------
-def interpret(score):
-    if score > 0.4:
-        return "Strong Tailwind for MCX", "🟢"
-    elif score > 0.15:
-        return "Mild Tailwind for MCX", "🟢"
-    elif score > -0.15:
-        return "Neutral", "🟡"
-    elif score > -0.4:
-        return "Headwind for MCX", "🔴"
-    else:
-        return "Strong Headwind for MCX", "🔴"
+# --------------------------------------------
+if macro_score > 0.25:
+    macro_verdict = "Supportive (Bullish for MCX)"
+elif macro_score > -0.25:
+    macro_verdict = "Neutral"
+else:
+    macro_verdict = "Risky (Bearish for MCX)"
 
-bias, icon = interpret(macro_score)
-confidence = int(abs(macro_score) * 100)
-
-# -------------------------------
+# --------------------------------------------
 # Display
-# -------------------------------
-st.markdown("## Macro Confirmation")
+# --------------------------------------------
+st.markdown("### 📊 Macro Confirmation Summary")
 
 st.markdown(f"""
-**USD–INR 5-Day Change:** {usd_inr_change*100:.2f}%  
-**Volatility Regime:** {vol_regime}  
+**USD-INR Change (5 days):** `{usd_inr_change:.2%}`  
+**USD-INR Impact Score:** `{usd_inr_score:.2f}`  
 
-### {icon} {bias}  
-**Confidence:** {confidence}%
-""")
+**Copper Volatility (10-day):** `{volatility:.2%}`  
+**Volatility Regime:** **{vol_regime}**
 
-st.divider()
+---
 
-st.caption("""
-⚠️ This model does NOT predict price.
-It confirms whether global copper moves are likely to TRANSLATE into MCX.
+### 🧠 Final Macro Verdict
+
+**Macro Score:** `{macro_score:.2f}`  
+**Environment:** **{macro_verdict}**
 """)
