@@ -1,117 +1,57 @@
-# ============================================
-# COPPER MACRO CONFIRMATION – STEP 1
-# USD-INR + Volatility Impact
-# ============================================
-
 import streamlit as st
 import yfinance as yf
+import pandas as pd
 import numpy as np
 
-st.set_page_config(page_title="Copper Macro – Step 1", layout="centered")
-
-st.title("🌍 Copper Macro Confirmation – Step 1")
-st.caption("USD-INR + Volatility impact | Global → India translation")
-
-# --------------------------------------------
-# Data Fetch
-# --------------------------------------------
-import streamlit as st
-import yfinance as yf
-import numpy as np
-
-st.set_page_config(page_title="Copper Macro Confirmation – Step 1", layout="centered")
+# -----------------------------
+# Page Config
+# -----------------------------
+st.set_page_config(
+    page_title="Copper Macro Confirmation – Step 1",
+    page_icon="🌍",
+    layout="centered"
+)
 
 st.title("🌍 Copper Macro Confirmation – Step 1")
 st.caption("USD-INR + Volatility impact | Global → India translation")
 
 # -----------------------------
-# Fetch market data (NO INDENT)
+# Data Download
 # -----------------------------
-copper = yf.download("HG=F", period="6mo", progress=False)
-usdinr = yf.download("INR=X", period="6mo", progress=False)
+@st.cache_data(ttl=3600)
+def load_data():
+    copper = yf.download("HG=F", period="6mo", interval="1d", progress=False)
+    usdinr = yf.download("USDINR=X", period="6mo", interval="1d", progress=False)
+    return copper, usdinr
+
+copper, usdinr = load_data()
 
 # -----------------------------
-# Data safety check
-# -----------------------------
-if copper.empty or usdinr.empty or len(copper) < 20 or len(usdinr) < 20:
-    st.error("Not enough market data yet.")
-    st.stop()
-
-# -----------------------------
-# USD-INR trend
-# -----------------------------
-inr_now = usdinr["Close"].iloc[-1]
-inr_prev = usdinr["Close"].iloc[-6]
-usd_inr_change = (inr_now - inr_prev) / inr_prev
-
-usd_inr_score = np.clip(usd_inr_change / 0.01, -1, 1)
-
-# -----------------------------
-# Copper volatility regime
-# -----------------------------
-returns = copper["Close"].pct_change().dropna()
-volatility = returns.rolling(10).std().iloc[-1]
-
-if volatility > 0.025:
-    vol_regime = "High"
-    vol_score = -0.2
-elif volatility > 0.015:
-    vol_regime = "Normal"
-    vol_score = 0.0
-else:
-    vol_regime = "Low"
-    vol_score = 0.1
-
-# -----------------------------
-# Final macro score
-# -----------------------------
-macro_score = 0.7 * usd_inr_score + 0.3 * vol_score
-
-if macro_score > 0.3:
-    verdict = "🟢 Supportive for MCX Copper"
-elif macro_score < -0.3:
-    verdict = "🔴 Risky for MCX Copper"
-else:
-    verdict = "🟡 Neutral"
-
-# -----------------------------
-# Display
-# -----------------------------
-st.subheader("Macro Assessment")
-st.write(f"**USD-INR change (5 days):** {usd_inr_change*100:.2f}%")
-st.write(f"**Volatility regime:** {vol_regime}")
-st.write(f"**Macro score:** {macro_score:.2f}")
-st.success(verdict)
-
-# --------------------------------------------
 # Data Validation
-# --------------------------------------------
-if copper.empty or usdinr.empty or len(copper) < 20 or len(usdinr) < 20:
+# -----------------------------
+if copper.empty or usdinr.empty:
+    st.error("Market data not available.")
+    st.stop()
+
+if len(copper) < 30 or len(usdinr) < 30:
     st.error("Not enough market data yet.")
     st.stop()
 
-# --------------------------------------------
+# -----------------------------
 # USD-INR Impact
-# --------------------------------------------
+# -----------------------------
 inr_now = float(usdinr["Close"].iloc[-1])
 inr_prev = float(usdinr["Close"].iloc[-6])
-
 usd_inr_change = (inr_now - inr_prev) / inr_prev
 
-# INR weakening = bullish MCX copper
-usd_inr_score = np.clip(usd_inr_change / 0.01, -1, 1)
-usd_inr_score = float(usd_inr_score)
+# INR weakening → bullish MCX
+usd_inr_score = float(np.clip(usd_inr_change / 0.01, -1, 1))
 
-# --------------------------------------------
+# -----------------------------
 # Copper Volatility Regime
-# --------------------------------------------
+# -----------------------------
 returns = copper["Close"].pct_change().dropna()
-
-if len(returns) < 10:
-    st.error("Not enough data for volatility calculation.")
-    st.stop()
-
-volatility = float(returns.rolling(10).std().iloc[-1])
+volatility = float(returns.rolling(10).std().dropna().iloc[-1])
 
 if volatility > 0.025:
     vol_regime = "High"
@@ -123,38 +63,37 @@ else:
     vol_regime = "Low"
     vol_score = 0.1
 
-# --------------------------------------------
-# Final Macro Score
-# --------------------------------------------
-macro_score = 0.7 * usd_inr_score + 0.3 * vol_score
-macro_score = float(np.clip(macro_score, -1, 1))
+# -----------------------------
+# Macro Confirmation Score
+# -----------------------------
+macro_score = (0.7 * usd_inr_score) + (0.3 * vol_score)
 
-# --------------------------------------------
-# Interpretation
-# --------------------------------------------
 if macro_score > 0.25:
-    macro_verdict = "Supportive (Bullish for MCX)"
-elif macro_score > -0.25:
-    macro_verdict = "Neutral"
+    verdict = "✅ Macro Supportive (Bullish)"
+elif macro_score < -0.25:
+    verdict = "⚠️ Macro Risky (Bearish)"
 else:
-    macro_verdict = "Risky (Bearish for MCX)"
+    verdict = "➖ Macro Neutral"
 
-# --------------------------------------------
-# Display
-# --------------------------------------------
-st.markdown("### 📊 Macro Confirmation Summary")
+# -----------------------------
+# Display Results
+# -----------------------------
+st.subheader("📊 Macro Signals")
 
-st.markdown(f"""
-**USD-INR Change (5 days):** `{usd_inr_change:.2%}`  
-**USD-INR Impact Score:** `{usd_inr_score:.2f}`  
-
-**Copper Volatility (10-day):** `{volatility:.2%}`  
-**Volatility Regime:** **{vol_regime}**
+st.markdown(
+    f"""
+**USD-INR Change (5 days):** `{usd_inr_change*100:.2f}%`  
+**Volatility Regime:** `{vol_regime}`  
+**Volatility (10d σ):** `{volatility:.4f}`  
 
 ---
 
-### 🧠 Final Macro Verdict
+### 🔎 Macro Verdict
+## {verdict}
 
-**Macro Score:** `{macro_score:.2f}`  
-**Environment:** **{macro_verdict}**
-""")
+**Macro Score:** `{macro_score:.2f}`
+"""
+)
+
+st.divider()
+st.caption("Step-1 model · Educational / planning tool · Not financial advice")
