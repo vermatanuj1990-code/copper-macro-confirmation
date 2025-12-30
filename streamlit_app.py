@@ -15,13 +15,73 @@ st.caption("USD-INR + Volatility impact | Global → India translation")
 # --------------------------------------------
 # Data Fetch
 # --------------------------------------------
-@st.cache_data(ttl=3600)
-def fetch_data():
+import streamlit as st
+import yfinance as yf
+import numpy as np
+
+st.set_page_config(page_title="Copper Macro Confirmation – Step 1", layout="centered")
+
+st.title("🌍 Copper Macro Confirmation – Step 1")
+st.caption("USD-INR + Volatility impact | Global → India translation")
+
+# -----------------------------
+# Fetch market data (NO INDENT)
+# -----------------------------
 copper = yf.download("HG=F", period="6mo", progress=False)
 usdinr = yf.download("INR=X", period="6mo", progress=False)
-    return copper, usdinr
 
-copper, usdinr = fetch_data()
+# -----------------------------
+# Data safety check
+# -----------------------------
+if copper.empty or usdinr.empty or len(copper) < 20 or len(usdinr) < 20:
+    st.error("Not enough market data yet.")
+    st.stop()
+
+# -----------------------------
+# USD-INR trend
+# -----------------------------
+inr_now = usdinr["Close"].iloc[-1]
+inr_prev = usdinr["Close"].iloc[-6]
+usd_inr_change = (inr_now - inr_prev) / inr_prev
+
+usd_inr_score = np.clip(usd_inr_change / 0.01, -1, 1)
+
+# -----------------------------
+# Copper volatility regime
+# -----------------------------
+returns = copper["Close"].pct_change().dropna()
+volatility = returns.rolling(10).std().iloc[-1]
+
+if volatility > 0.025:
+    vol_regime = "High"
+    vol_score = -0.2
+elif volatility > 0.015:
+    vol_regime = "Normal"
+    vol_score = 0.0
+else:
+    vol_regime = "Low"
+    vol_score = 0.1
+
+# -----------------------------
+# Final macro score
+# -----------------------------
+macro_score = 0.7 * usd_inr_score + 0.3 * vol_score
+
+if macro_score > 0.3:
+    verdict = "🟢 Supportive for MCX Copper"
+elif macro_score < -0.3:
+    verdict = "🔴 Risky for MCX Copper"
+else:
+    verdict = "🟡 Neutral"
+
+# -----------------------------
+# Display
+# -----------------------------
+st.subheader("Macro Assessment")
+st.write(f"**USD-INR change (5 days):** {usd_inr_change*100:.2f}%")
+st.write(f"**Volatility regime:** {vol_regime}")
+st.write(f"**Macro score:** {macro_score:.2f}")
+st.success(verdict)
 
 # --------------------------------------------
 # Data Validation
