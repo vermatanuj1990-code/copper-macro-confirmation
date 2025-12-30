@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 import numpy as np
+import time
 
 # -----------------------------
 # Page Config
@@ -16,25 +16,41 @@ st.title("🌍 Copper Macro Confirmation – Step 1")
 st.caption("USD-INR + Volatility impact | Global → India translation")
 
 # -----------------------------
-# Data Download
+# Safe Downloader with Retry
 # -----------------------------
 @st.cache_data(ttl=3600)
-def load_data():
-    copper = yf.download("HG=F", period="6mo", interval="1d", progress=False)
-    usdinr = yf.download("USDINR=X", period="6mo", interval="1d", progress=False)
-    return copper, usdinr
-
-copper, usdinr = load_data()
+def safe_download(ticker, retries=3):
+    for i in range(retries):
+        try:
+            df = yf.download(
+                ticker,
+                period="6mo",
+                interval="1d",
+                progress=False,
+                threads=False
+            )
+            if not df.empty:
+                return df
+        except:
+            pass
+        time.sleep(2)
+    return None
 
 # -----------------------------
-# Data Validation
+# Load Data
 # -----------------------------
-if copper.empty or usdinr.empty:
-    st.error("Market data not available.")
+copper = safe_download("HG=F")
+usdinr = safe_download("USDINR=X")
+
+# -----------------------------
+# Validation
+# -----------------------------
+if copper is None or usdinr is None:
+    st.warning("⚠️ Data source temporarily unavailable. Please reload in a minute.")
     st.stop()
 
 if len(copper) < 30 or len(usdinr) < 30:
-    st.error("Not enough market data yet.")
+    st.warning("⚠️ Not enough historical data yet.")
     st.stop()
 
 # -----------------------------
@@ -43,12 +59,10 @@ if len(copper) < 30 or len(usdinr) < 30:
 inr_now = float(usdinr["Close"].iloc[-1])
 inr_prev = float(usdinr["Close"].iloc[-6])
 usd_inr_change = (inr_now - inr_prev) / inr_prev
-
-# INR weakening → bullish MCX
 usd_inr_score = float(np.clip(usd_inr_change / 0.01, -1, 1))
 
 # -----------------------------
-# Copper Volatility Regime
+# Volatility Regime
 # -----------------------------
 returns = copper["Close"].pct_change().dropna()
 volatility = float(returns.rolling(10).std().dropna().iloc[-1])
@@ -64,9 +78,9 @@ else:
     vol_score = 0.1
 
 # -----------------------------
-# Macro Confirmation Score
+# Macro Score
 # -----------------------------
-macro_score = (0.7 * usd_inr_score) + (0.3 * vol_score)
+macro_score = 0.7 * usd_inr_score + 0.3 * vol_score
 
 if macro_score > 0.25:
     verdict = "✅ Macro Supportive (Bullish)"
@@ -76,24 +90,22 @@ else:
     verdict = "➖ Macro Neutral"
 
 # -----------------------------
-# Display Results
+# Output
 # -----------------------------
 st.subheader("📊 Macro Signals")
 
-st.markdown(
-    f"""
+st.markdown(f"""
 **USD-INR Change (5 days):** `{usd_inr_change*100:.2f}%`  
 **Volatility Regime:** `{vol_regime}`  
-**Volatility (10d σ):** `{volatility:.4f}`  
+**10-Day Volatility:** `{volatility:.4f}`  
 
 ---
 
-### 🔎 Macro Verdict
-## {verdict}
+## 🔎 Macro Verdict
+### {verdict}
 
 **Macro Score:** `{macro_score:.2f}`
-"""
-)
+""")
 
 st.divider()
-st.caption("Step-1 model · Educational / planning tool · Not financial advice")
+st.caption("Step-1 macro confirmation | Planning tool | Not financial advice")
