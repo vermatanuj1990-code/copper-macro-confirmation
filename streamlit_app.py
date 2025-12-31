@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 import time
+from step2_china_inventory import run_step2
 
 # -----------------------------
 # Page Config
@@ -109,3 +110,20 @@ st.markdown(f"""
 
 st.divider()
 st.caption("Step-1 macro confirmation | Planning tool | Not financial advice")
+# ==============================
+# STEP 2: China + Inventory
+# ==============================
+st.divider()
+st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
+
+step2_score, step2_label, step2_diag = run_step2()
+
+st.write(f"**Step-2 Verdict:** {step2_label}")
+st.write(f"**Step-2 Score:** {step2_score:.2f}")
+
+if step2_diag:
+    st.caption(
+        f"China equity (10d): {step2_diag['china_return']*100:.2f}% | "
+        f"Copper trend (10d): {step2_diag['price_trend']*100:.2f}% | "
+        f"Volatility: {step2_diag['volatility']:.4f}"
+    )
