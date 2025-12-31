@@ -304,3 +304,102 @@ st.markdown(
 )
 
 st.caption("Decision-support tool | Use with price levels & risk management")
+# ==================================================
+# 📅 NEXT-DAY MCX RISK & BIAS METER (FLOW-BASED)
+# ==================================================
+
+st.divider()
+st.subheader("📅 Next-Day MCX Copper Risk Meter")
+st.caption("Uses yesterday’s MCX price & Open Interest (flow-based check)")
+
+with st.expander("🔎 Enter Yesterday’s MCX Data (Manual)", expanded=False):
+
+    price_1d = st.number_input(
+        "Yesterday – MCX Copper Price Change (%)",
+        value=0.0,
+        step=0.1,
+        key="nd_price_1d"
+    )
+
+    price_5d = st.number_input(
+        "Last 5 Days – MCX Copper Price Change (%)",
+        value=0.0,
+        step=0.1,
+        key="nd_price_5d"
+    )
+
+    oi_1d = st.number_input(
+        "Yesterday – Open Interest Change (%)",
+        value=0.0,
+        step=0.1,
+        key="nd_oi_1d"
+    )
+
+if st.button("▶️ Generate Next-Day Risk Outlook", key="nd_button"):
+
+    score = 0
+    notes = []
+    penalty = 0
+
+    # ---- Direction ----
+    score += 1 if price_1d > 0 else -1
+    score += 1 if price_5d > 0 else -1
+
+    # ---- OI regime ----
+    if price_1d > 0 and oi_1d > 0:
+        score += 1
+        notes.append("Long buildup – new longs added")
+    elif price_1d > 0 and oi_1d < 0:
+        notes.append("Short covering – bounce may lack follow-through")
+    elif price_1d < 0 and oi_1d > 0:
+        score -= 1
+        notes.append("Short buildup – fresh shorts entering")
+    elif price_1d < 0 and oi_1d < 0:
+        score += 0.5
+        notes.append("Long unwinding – selling pressure easing")
+
+    # ---- Exhaustion penalties ----
+    if abs(price_1d) > 3:
+        penalty -= 1
+        notes.append("Large 1-day move – exhaustion risk")
+
+    if abs(oi_1d) > 5:
+        penalty -= 0.5
+        notes.append("Sharp OI change – crowded positioning")
+
+    final_score = round(score + penalty, 2)
+
+    # ---- Bias classification ----
+    if final_score >= 1.5:
+        bias = "Bullish"
+        light = "🟢"
+    elif final_score >= 0.5:
+        bias = "Mild Bullish"
+        light = "🟡"
+    elif final_score <= -1.5:
+        bias = "Bearish"
+        light = "🔴"
+    elif final_score <= -0.5:
+        bias = "Mild Bearish"
+        light = "🟡"
+    else:
+        bias = "Neutral"
+        light = "⚪"
+
+    risk = "High (Crowded / Reversal Risk)" if penalty < 0 else "Normal"
+
+    # ---- Display card ----
+    st.markdown("### 📌 Next-Day Outlook")
+    st.markdown(f"## {light} {bias}")
+    st.write(f"**Final Flow Score:** `{final_score}`")
+
+    if risk.startswith("High"):
+        st.error(f"⚠️ Risk Level: {risk}")
+    else:
+        st.success(f"✅ Risk Level: {risk}")
+
+    st.markdown("### 🧠 Interpretation")
+    for n in notes:
+        st.write(f"- {n}")
+
+    st.caption("Flow-based check for next session only. Use with main model.")
