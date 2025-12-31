@@ -350,14 +350,20 @@ if st.button("▶ Generate Next-Day Risk Outlook"):
     score = 0.0
     notes = []
 
-    # --- Direction from price ---
-    if price_move > 0:
-        score += 0.5
-        notes.append("Positive price momentum yesterday")
-    elif price_move < 0:
-        score -= 0.5
-        notes.append("Negative price momentum yesterday")
-
+    
+    # --- Direction from price (EXPANSION-AWARE) ---
+if price_move >= 3.0:
+    score -= 0.5
+    notes.append("Large up-move → exhaustion / profit-booking risk")
+elif price_move > 0:
+    score += 0.5
+    notes.append("Positive price momentum")
+elif price_move <= -3.0:
+    score += 0.5
+    notes.append("Sharp sell-off → short-covering / bounce risk")
+else:
+    score -= 0.5
+    notes.append("Negative price momentum")
     # --- OI regime impact ---
     if "Long Buildup" in oi_regime:
         score += 1.0
