@@ -112,12 +112,73 @@ st.markdown(f"""
 st.divider()
 st.caption("Step-1 macro confirmation | Planning tool | Not financial advice")
 # ==============================
-# STEP 2: China + Inventory
+# 🇨🇳 STEP 2: China Demand & Inventory
 # ==============================
+
 st.divider()
 st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
+st.write("Assessing China-linked demand signals and copper stress…")
 
-step2_score, step2_label, step2_diag = run_step2()
+# --- Data sources ---
+china = yf.download("000001.SS", period="6mo", progress=False)   # Shanghai Composite
+copper_cn = yf.download("HG=F", period="6mo", progress=False)    # Copper proxy
+
+# --- Fallback defaults ---
+step2_score = 0.0
+step2_label = "Neutral"
+step2_diag = "Insufficient China data – neutral stance"
+
+if china.empty or copper_cn.empty or len(china) < 20:
+    st.warning("China market data unavailable — Step-2 set to Neutral")
+
+else:
+    # --- China equity momentum (10d) ---
+    china_ret_10d = china["Close"].pct_change(10).iloc[-1]
+
+    # --- Copper short-term trend (10d) ---
+    copper_ret_10d = copper_cn["Close"].pct_change(10).iloc[-1]
+
+    # --- Volatility filter ---
+    copper_vol = copper_cn["Close"].pct_change().rolling(10).std().iloc[-1]
+
+    # --- Scoring logic ---
+    step2_score = 0.0
+
+    if china_ret_10d > 0.015:
+        step2_score += 0.15
+    elif china_ret_10d < -0.015:
+        step2_score -= 0.15
+
+    if copper_ret_10d > 0.05:
+        step2_score += 0.15
+    elif copper_ret_10d < -0.05:
+        step2_score -= 0.15
+
+    if copper_vol > 0.03:
+        step2_score -= 0.05  # inventory stress / instability
+
+    # --- Label ---
+    if step2_score > 0.15:
+        step2_label = "Supportive"
+    elif step2_score < -0.15:
+        step2_label = "Negative"
+    else:
+        step2_label = "Mild Supportive"
+
+    step2_diag = (
+        f"China equity (10d): {china_ret_10d:.2%} | "
+        f"Copper trend (10d): {copper_ret_10d:.2%} | "
+        f"Volatility: {copper_vol:.4f}"
+    )
+
+# --- Display ---
+st.markdown("### 📊 Step-2 Signals")
+st.write(step2_diag)
+
+st.markdown("### 🔍 Step-2 Verdict")
+st.success(step2_label) if step2_score > 0 else st.warning(step2_label)
+
+st.write(f"**Step-2 Score:** `{step2_score:.2f}`")
 # ===============================
 # ⚡ STEP 3: MOMENTUM & EXHAUSTION
 # ===============================
