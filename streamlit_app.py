@@ -304,33 +304,29 @@ st.markdown(
 )
 
 st.caption("Decision-support tool | Use with price levels & risk management")
-# ==================================================
-# 📅 NEXT-DAY MCX RISK METER (SIMPLIFIED & PRACTICAL)
-# ==================================================
+# =========================================================
+# NEXT-DAY MCX COPPER RISK METER (MANUAL, FLOW-BASED)
+# =========================================================
 
-st.divider()
-st.subheader("📅 Next-Day MCX Copper Risk Meter")
+st.markdown("---")
+st.header("📊 Next-Day MCX Copper Risk Meter")
 st.caption("Based on yesterday’s price move, OI regime & trend context")
 
-# ---------------------------
+# -------------------------
 # INPUTS
-# ---------------------------
-col1, col2 = st.columns(2)
+# -------------------------
+price_move = st.number_input(
+    "Yesterday Price Move (%)",
+    min_value=-15.0,
+    max_value=15.0,
+    value=0.0,
+    step=0.1
+)
 
-with col1:
-    price_move = st.number_input(
-        "Yesterday Price Move (%)",
-        value=0.0,
-        step=0.1,
-        help="Example: +5.05 or -3.91"
-    )
-
-with col2:
-    trend_context = st.selectbox(
-        "Trend Context (Daily Chart)",
-        ["UP", "DOWN", "RANGE"],
-        help="Higher highs = UP | Lower lows = DOWN | Sideways = RANGE"
-    )
+trend_context = st.selectbox(
+    "Trend Context (Daily Chart)",
+    ["UP", "DOWN", "SIDEWAYS"]
+)
 
 oi_regime = st.selectbox(
     "Open Interest Regime (from MCX / Moneycontrol)",
@@ -342,95 +338,78 @@ oi_regime = st.selectbox(
     ]
 )
 
-# ---------------------------
-# LOGIC
-# ---------------------------
+# -------------------------
+# CALCULATION
+# -------------------------
 if st.button("▶ Generate Next-Day Risk Outlook"):
 
     score = 0.0
     notes = []
 
-    
-    # --- Direction from price (EXPANSION-AWARE) ---
-if price_move >= 3.0:
-    score -= 0.5
-    notes.append("Large up-move → exhaustion / profit-booking risk")
-elif price_move > 0:
-    score += 0.5
-    notes.append("Positive price momentum")
-elif price_move <= -3.0:
-    score += 0.5
-    notes.append("Sharp sell-off → short-covering / bounce risk")
-else:
-    score -= 0.5
-    notes.append("Negative price momentum")
-    # --- OI regime impact ---
+    # ---- PRICE MOVE (exhaustion-aware, very important) ----
+    if price_move >= 3.0:
+        score -= 0.7
+        notes.append("Strong up-move → exhaustion / profit booking risk")
+    elif price_move > 0:
+        score += 0.4
+        notes.append("Positive price momentum")
+    elif price_move <= -3.0:
+        score += 0.7
+        notes.append("Sharp sell-off → bounce / short-covering risk")
+    else:
+        score -= 0.4
+        notes.append("Negative price momentum")
+
+    # ---- OPEN INTEREST REGIME ----
     if "Long Buildup" in oi_regime:
-        score += 1.0
-        notes.append("Fresh long positions added")
+        score += 0.8
+        notes.append("Fresh longs entering market")
     elif "Short Buildup" in oi_regime:
-        score -= 1.0
-        notes.append("Fresh short positions added")
+        score -= 0.8
+        notes.append("Fresh shorts entering market")
     elif "Short Covering" in oi_regime:
-        score += 0.3
-        notes.append("Shorts covering — bounce may be fragile")
+        score += 0.4
+        notes.append("Shorts covering → upside pressure")
     elif "Long Unwinding" in oi_regime:
-        score -= 0.3
-        notes.append("Longs exiting — selling pressure easing")
+        score -= 0.4
+        notes.append("Longs exiting → downside pressure")
 
-    # --- Trend alignment / conflict ---
-    if trend_context == "UP" and "Long Buildup" in oi_regime:
-        score += 0.5
-        notes.append("OI aligned with uptrend (healthy)")
-    elif trend_context == "DOWN" and "Short Buildup" in oi_regime:
-        score += 0.5
-        notes.append("OI aligned with downtrend (healthy)")
-    elif trend_context == "UP" and "Short Buildup" in oi_regime:
-        score -= 0.7
-        notes.append("Counter-trend shorts (volatility risk)")
-    elif trend_context == "DOWN" and "Long Buildup" in oi_regime:
-        score -= 0.7
-        notes.append("Counter-trend longs (trap risk)")
+    # ---- TREND CONTEXT ALIGNMENT ----
+    if trend_context == "UP" and "Short Buildup" in oi_regime:
+        score -= 0.6
+        notes.append("Counter-trend short buildup → volatility risk")
 
-    # --- Exhaustion check ---
-    if abs(price_move) > 3:
-        score -= 0.5
-        notes.append("Large single-day move — exhaustion risk")
+    if trend_context == "DOWN" and "Long Buildup" in oi_regime:
+        score -= 0.6
+        notes.append("Counter-trend long buildup → trap risk")
 
-    # ---------------------------
+    # -------------------------
     # FINAL INTERPRETATION
-    # ---------------------------
+    # -------------------------
     if score >= 1.2:
-        bias = "Bullish"
-        light = "🟢"
+        verdict = "🟢 Bullish"
         action = "Continuation likely — buy on dips"
     elif score >= 0.3:
-        bias = "Mild Bullish"
-        light = "🟡"
-        action = "Positive bias but avoid chasing"
-    elif score <= -1.2:
-        bias = "Bearish"
-        light = "🔴"
-        action = "Downside pressure — sell on rise / hedge"
-    elif score <= -0.3:
-        bias = "Mild Bearish"
-        light = "🟡"
-        action = "Weak tone — cautious longs"
+        verdict = "🟡 Cautious Bullish"
+        action = "Upside possible but volatile — partial positions only"
+    elif score > -0.3:
+        verdict = "🟠 Range / Uncertain"
+        action = "Wait — market seeking direction"
+    elif score > -1.2:
+        verdict = "🔴 Cautious Bearish"
+        action = "Sell on rise / hedge exposure"
     else:
-        bias = "Neutral"
-        light = "⚪"
-        action = "Range / choppy session likely"
+        verdict = "🔴 Bearish"
+        action = "Downside continuation likely"
 
-    # ---------------------------
+    # -------------------------
     # DISPLAY
-    # ---------------------------
-    st.markdown("### 📌 Next-Day Outlook")
-    st.markdown(f"## {light} {bias}")
-    st.write(f"**Risk Score:** `{round(score, 2)}`")
+    # -------------------------
+    st.subheader("📌 Next-Day Outlook")
+    st.markdown(f"### {verdict}")
+    st.markdown(f"**Risk Score:** `{round(score, 2)}`")
     st.info(action)
 
-    st.markdown("### 🧠 Interpretation Notes")
-    for n in notes:
-        st.write(f"- {n}")
-
-    st.caption("This is a risk & bias meter, not a price prediction.")
+    with st.expander("🧠 Interpretation Notes"):
+        for n in notes:
+            st.write("•", n)
