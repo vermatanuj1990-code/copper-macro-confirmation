@@ -118,25 +118,34 @@ st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
 
 step2_score, step2_label, step2_diag = run_step2()
 # =========================================================
-# STEP 3: MOMENTUM & EXHAUSTION ANALYSIS
+# STEP 3: MOMENTUM & EXHAUSTION ANALYSIS (SAFE)
 # =========================================================
+
 st.divider()
 st.header("⚡ Step 3: Momentum & Exhaustion")
 
+# --- Safety check ---
+if len(copper) < 30:
+    st.warning("Not enough data for momentum analysis.")
+    st.stop()
+
 # --- RSI Calculation ---
 delta = copper["Close"].diff()
-gain = delta.clip(lower=0)
-loss = -delta.clip(upper=0)
+gain = delta.where(delta > 0, 0.0)
+loss = -delta.where(delta < 0, 0.0)
 
 avg_gain = gain.rolling(14).mean()
 avg_loss = loss.rolling(14).mean()
 
 rs = avg_gain / avg_loss
 rsi = 100 - (100 / (1 + rs))
-rsi_latest = rsi.iloc[-1]
 
-# --- Momentum (Rate of Change) ---
-roc_10 = (copper["Close"].iloc[-1] - copper["Close"].iloc[-11]) / copper["Close"].iloc[-11]
+rsi_latest = float(rsi.dropna().iloc[-1])
+
+# --- Momentum ---
+roc_10 = (
+    copper["Close"].iloc[-1] - copper["Close"].iloc[-11]
+) / copper["Close"].iloc[-11]
 
 # --- Price Stretch ---
 ma20 = copper["Close"].rolling(20).mean().iloc[-1]
@@ -145,18 +154,18 @@ stretch = (copper["Close"].iloc[-1] - ma20) / ma20
 # --- Scoring ---
 momentum_score = 0.0
 
-if rsi_latest > 70:
-    momentum_score -= 0.3
+if rsi_latest >= 70:
     phase = "Exhaustion Risk"
-elif rsi_latest > 65:
-    momentum_score -= 0.1
+    momentum_score -= 0.3
+elif rsi_latest >= 65:
     phase = "Late Trend"
-elif rsi_latest > 55:
-    momentum_score += 0.15
-    phase = "Healthy Expansion"
-else:
     momentum_score -= 0.1
+elif rsi_latest >= 55:
+    phase = "Healthy Expansion"
+    momentum_score += 0.15
+else:
     phase = "Weak / Early"
+    momentum_score -= 0.1
 
 if stretch > 0.06:
     momentum_score -= 0.2
@@ -166,11 +175,11 @@ elif stretch < 0.03:
 momentum_score = round(momentum_score, 2)
 
 # --- Verdict ---
-if momentum_score > 0.15:
+if momentum_score >= 0.2:
     verdict = "Expansion Phase – Buy on strength"
-elif momentum_score > 0:
-    verdict = "Healthy but Selective"
-elif momentum_score > -0.15:
+elif momentum_score >= 0:
+    verdict = "Healthy – Buy selectively"
+elif momentum_score >= -0.2:
     verdict = "Late Trend – Buy on dips only"
 else:
     verdict = "Exhaustion – Avoid fresh buys"
@@ -183,16 +192,7 @@ st.markdown(f"""
 **Price Stretch from 20-DMA:** {stretch*100:.2f}%  
 
 ### 🔎 Step-3 Verdict
-**{verdict}**  
+**{verdict}**
 
 **Step-3 Score:** `{momentum_score}`
 """)
-st.write(f"**Step-2 Verdict:** {step2_label}")
-st.write(f"**Step-2 Score:** {step2_score:.2f}")
-
-if step2_diag:
-    st.caption(
-        f"China equity (10d): {step2_diag['china_return']*100:.2f}% | "
-        f"Copper trend (10d): {step2_diag['price_trend']*100:.2f}% | "
-        f"Volatility: {step2_diag['volatility']:.4f}"
-    )
