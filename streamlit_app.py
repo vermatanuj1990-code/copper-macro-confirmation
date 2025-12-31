@@ -305,101 +305,126 @@ st.markdown(
 
 st.caption("Decision-support tool | Use with price levels & risk management")
 # ==================================================
-# 📅 NEXT-DAY MCX RISK & BIAS METER (FLOW-BASED)
+# 📅 NEXT-DAY MCX RISK METER (SIMPLIFIED & PRACTICAL)
 # ==================================================
 
 st.divider()
 st.subheader("📅 Next-Day MCX Copper Risk Meter")
-st.caption("Uses yesterday’s MCX price & Open Interest (flow-based check)")
+st.caption("Based on yesterday’s price move, OI regime & trend context")
 
-with st.expander("🔎 Enter Yesterday’s MCX Data (Manual)", expanded=False):
+# ---------------------------
+# INPUTS
+# ---------------------------
+col1, col2 = st.columns(2)
 
-    price_1d = st.number_input(
-        "Yesterday – MCX Copper Price Change (%)",
+with col1:
+    price_move = st.number_input(
+        "Yesterday Price Move (%)",
         value=0.0,
         step=0.1,
-        key="nd_price_1d"
+        help="Example: +5.05 or -3.91"
     )
 
-    price_5d = st.number_input(
-        "Last 5 Days – MCX Copper Price Change (%)",
-        value=0.0,
-        step=0.1,
-        key="nd_price_5d"
+with col2:
+    trend_context = st.selectbox(
+        "Trend Context (Daily Chart)",
+        ["UP", "DOWN", "RANGE"],
+        help="Higher highs = UP | Lower lows = DOWN | Sideways = RANGE"
     )
 
-    oi_1d = st.number_input(
-        "Yesterday – Open Interest Change (%)",
-        value=0.0,
-        step=0.1,
-        key="nd_oi_1d"
-    )
+oi_regime = st.selectbox(
+    "Open Interest Regime (from MCX / Moneycontrol)",
+    [
+        "Long Buildup (OI ↑ Price ↑)",
+        "Short Buildup (OI ↑ Price ↓)",
+        "Short Covering (OI ↓ Price ↑)",
+        "Long Unwinding (OI ↓ Price ↓)"
+    ]
+)
 
-if st.button("▶️ Generate Next-Day Risk Outlook", key="nd_button"):
+# ---------------------------
+# LOGIC
+# ---------------------------
+if st.button("▶ Generate Next-Day Risk Outlook"):
 
-    score = 0
+    score = 0.0
     notes = []
-    penalty = 0
 
-    # ---- Direction ----
-    score += 1 if price_1d > 0 else -1
-    score += 1 if price_5d > 0 else -1
-
-    # ---- OI regime ----
-    if price_1d > 0 and oi_1d > 0:
-        score += 1
-        notes.append("Long buildup – new longs added")
-    elif price_1d > 0 and oi_1d < 0:
-        notes.append("Short covering – bounce may lack follow-through")
-    elif price_1d < 0 and oi_1d > 0:
-        score -= 1
-        notes.append("Short buildup – fresh shorts entering")
-    elif price_1d < 0 and oi_1d < 0:
+    # --- Direction from price ---
+    if price_move > 0:
         score += 0.5
-        notes.append("Long unwinding – selling pressure easing")
+        notes.append("Positive price momentum yesterday")
+    elif price_move < 0:
+        score -= 0.5
+        notes.append("Negative price momentum yesterday")
 
-    # ---- Exhaustion penalties ----
-    if abs(price_1d) > 3:
-        penalty -= 1
-        notes.append("Large 1-day move – exhaustion risk")
+    # --- OI regime impact ---
+    if "Long Buildup" in oi_regime:
+        score += 1.0
+        notes.append("Fresh long positions added")
+    elif "Short Buildup" in oi_regime:
+        score -= 1.0
+        notes.append("Fresh short positions added")
+    elif "Short Covering" in oi_regime:
+        score += 0.3
+        notes.append("Shorts covering — bounce may be fragile")
+    elif "Long Unwinding" in oi_regime:
+        score -= 0.3
+        notes.append("Longs exiting — selling pressure easing")
 
-    if abs(oi_1d) > 5:
-        penalty -= 0.5
-        notes.append("Sharp OI change – crowded positioning")
+    # --- Trend alignment / conflict ---
+    if trend_context == "UP" and "Long Buildup" in oi_regime:
+        score += 0.5
+        notes.append("OI aligned with uptrend (healthy)")
+    elif trend_context == "DOWN" and "Short Buildup" in oi_regime:
+        score += 0.5
+        notes.append("OI aligned with downtrend (healthy)")
+    elif trend_context == "UP" and "Short Buildup" in oi_regime:
+        score -= 0.7
+        notes.append("Counter-trend shorts (volatility risk)")
+    elif trend_context == "DOWN" and "Long Buildup" in oi_regime:
+        score -= 0.7
+        notes.append("Counter-trend longs (trap risk)")
 
-    final_score = round(score + penalty, 2)
+    # --- Exhaustion check ---
+    if abs(price_move) > 3:
+        score -= 0.5
+        notes.append("Large single-day move — exhaustion risk")
 
-    # ---- Bias classification ----
-    if final_score >= 1.5:
+    # ---------------------------
+    # FINAL INTERPRETATION
+    # ---------------------------
+    if score >= 1.2:
         bias = "Bullish"
         light = "🟢"
-    elif final_score >= 0.5:
+        action = "Continuation likely — buy on dips"
+    elif score >= 0.3:
         bias = "Mild Bullish"
         light = "🟡"
-    elif final_score <= -1.5:
+        action = "Positive bias but avoid chasing"
+    elif score <= -1.2:
         bias = "Bearish"
         light = "🔴"
-    elif final_score <= -0.5:
+        action = "Downside pressure — sell on rise / hedge"
+    elif score <= -0.3:
         bias = "Mild Bearish"
         light = "🟡"
+        action = "Weak tone — cautious longs"
     else:
         bias = "Neutral"
         light = "⚪"
+        action = "Range / choppy session likely"
 
-    risk = "High (Crowded / Reversal Risk)" if penalty < 0 else "Normal"
-
-    # ---- Display card ----
+    # ---------------------------
+    # DISPLAY
+    # ---------------------------
     st.markdown("### 📌 Next-Day Outlook")
     st.markdown(f"## {light} {bias}")
-    st.write(f"**Final Flow Score:** `{final_score}`")
+    st.write(f"**Risk Score:** `{round(score, 2)}`")
+    st.info(action)
 
-    if risk.startswith("High"):
-        st.error(f"⚠️ Risk Level: {risk}")
-    else:
-        st.success(f"✅ Risk Level: {risk}")
-
-    st.markdown("### 🧠 Interpretation")
+    st.markdown("### 🧠 Interpretation Notes")
     for n in notes:
         st.write(f"- {n}")
 
-    st.caption("Flow-based check for next session only. Use with main model.")
+    st.caption("This is a risk & bias meter, not a price prediction.")
