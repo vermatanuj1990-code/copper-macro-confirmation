@@ -119,31 +119,20 @@ st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
 
 step2_score, step2_label, step2_diag = run_step2()
 # ===============================
-# IMPORTS (ALWAYS AT TOP)
+# ⚡ STEP 3: MOMENTUM & EXHAUSTION
 # ===============================
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import streamlit as st
-# -------------------------------
-# STEP 3: Momentum & Exhaustion
-# -------------------------------
-
 st.markdown("## ⚡ Step 3: Momentum & Exhaustion")
 
-# Download copper data
 copper = yf.download("HG=F", period="6mo", interval="1d")
 
 if copper.empty or len(copper) < 30:
-    st.error("Not enough data for momentum analysis.")
+    st.warning("Not enough copper data for momentum analysis.")
     st.stop()
 
-close = copper["Close"]
-
-# --- RSI Calculation ---
-delta = close.diff()
-gain = delta.where(delta > 0, 0.0)
-loss = -delta.where(delta < 0, 0.0)
+# RSI calculation
+delta = copper["Close"].diff()
+gain = delta.clip(lower=0)
+loss = -delta.clip(upper=0)
 
 avg_gain = gain.rolling(14).mean()
 avg_loss = loss.rolling(14).mean()
@@ -152,30 +141,45 @@ rs = avg_gain / avg_loss
 rsi = 100 - (100 / (1 + rs))
 rsi_latest = rsi.iloc[-1]
 
-# --- Price Stretch (20-day) ---
-ma20 = close.rolling(20).mean()
-stretch = (close.iloc[-1] - ma20.iloc[-1]) / ma20.iloc[-1]
+# Price stretch
+price_now = copper["Close"].iloc[-1]
+price_20 = copper["Close"].iloc[-20]
+stretch = (price_now - price_20) / price_20
 
-# --- Safety checks ---
+# Safety check
 if pd.isna(rsi_latest) or pd.isna(stretch):
-    st.error("Momentum indicators not ready yet.")
+    st.warning("Momentum indicators not ready yet.")
     st.stop()
 
-# --- Regime logic ---
-if rsi_latest > 70 and stretch > 0.06:
-    verdict = "Exhaustion Risk ⚠️"
-    score = -0.3
-elif rsi_latest < 35:
-    verdict = "Early Momentum Build 🚀"
-    score = 0.3
-else:
-    verdict = "Healthy Momentum ✅"
-    score = 0.1
+# Scoring
+step3_score = 0.0
+regime = "Neutral"
 
-# --- Display ---
-st.markdown(f"""
-### 🔍 Step-3 Verdict: **{verdict}**
-- **RSI (14):** {rsi_latest:.1f}
-- **Price Stretch vs 20-DMA:** {stretch*100:.2f}%
-- **Step-3 Score:** `{score}`
-""")
+if rsi_latest > 70:
+    step3_score -= 0.25
+    regime = "Overbought (Exhaustion Risk)"
+elif rsi_latest < 30:
+    step3_score += 0.25
+    regime = "Oversold (Rebound Potential)"
+
+if stretch > 0.06:
+    step3_score -= 0.15
+elif stretch < -0.05:
+    step3_score += 0.15
+
+# Display
+st.markdown("### 📊 Momentum Signals")
+st.write(f"RSI (14): {rsi_latest:.1f}")
+st.write(f"20-Day Price Stretch: {stretch*100:.2f}%")
+st.write(f"Momentum Regime: {regime}")
+
+st.markdown("### 🔍 Step-3 Verdict")
+if step3_score > 0.1:
+    st.success("Momentum Supportive")
+elif step3_score < -0.1:
+    st.error("Momentum Exhausted")
+else:
+    st.info("Momentum Neutral")
+
+st.write(f"Step-3 Score: `{step3_score:.2f}`")
+st.markdown("---")
