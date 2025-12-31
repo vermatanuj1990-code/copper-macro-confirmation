@@ -254,3 +254,53 @@ else:
 
 st.write(f"Step-3 Score: `{step3_score:.2f}`")
 st.markdown("---")
+# ================================
+# FINAL VERDICT & TRAFFIC LIGHT
+# ================================
+
+st.divider()
+st.subheader("🚦 Final Market Verdict")
+
+# --- Combine scores ---
+final_score = macro_score + step2_score + step3_score
+
+# --- Decide traffic light ---
+if final_score >= 0.40:
+    light = "🟢"
+    final_label = "Bullish Bias"
+    action = "Accumulate / Buy on dips"
+    color = "success"
+elif final_score >= 0.10:
+    light = "🟡"
+    final_label = "Cautious / Range-bound"
+    action = "Wait or partial action"
+    color = "warning"
+else:
+    light = "🔴"
+    final_label = "Risk / Exhaustion Zone"
+    action = "Reduce exposure / Avoid fresh buys"
+    color = "error"
+
+# --- Display result ---
+st.markdown(f"## {light} {final_label}")
+
+if color == "success":
+    st.success(action)
+elif color == "warning":
+    st.warning(action)
+else:
+    st.error(action)
+
+# --- Diagnostics ---
+st.markdown(
+    f"""
+**Score Breakdown**
+- Step 1 (Macro): `{macro_score:.2f}`
+- Step 2 (China & Inventory): `{step2_score:.2f}`
+- Step 3 (Momentum): `{step3_score:.2f}`
+
+**Final Composite Score:** `{final_score:.2f}`
+"""
+)
+
+st.caption("Decision-support tool | Use with price levels & risk management")
