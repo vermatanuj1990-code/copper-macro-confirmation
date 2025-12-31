@@ -119,64 +119,76 @@ st.divider()
 st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
 st.write("Assessing China-linked demand signals and copper stress…")
 
-# --- Data sources ---
-china = yf.download("000001.SS", period="6mo", progress=False)   # Shanghai Composite
-copper_cn = yf.download("HG=F", period="6mo", progress=False)    # Copper proxy
-
-# --- Fallback defaults ---
+# --- Defaults (VERY IMPORTANT) ---
 step2_score = 0.0
 step2_label = "Neutral"
-step2_diag = "Insufficient China data – neutral stance"
+step2_diag = "China data unavailable – neutral stance"
 
-if china.empty or copper_cn.empty or len(china) < 20:
-    st.warning("China market data unavailable — Step-2 set to Neutral")
+# --- Download data ---
+china = yf.download("000001.SS", period="6mo", progress=False)
+copper_cn = yf.download("HG=F", period="6mo", progress=False)
+
+# --- Validation ---
+if china.empty or copper_cn.empty:
+    st.warning("China or copper data unavailable — Step-2 neutral")
 
 else:
-    # --- China equity momentum (10d) ---
     china_ret_10d = china["Close"].pct_change(10).iloc[-1]
-
-    # --- Copper short-term trend (10d) ---
     copper_ret_10d = copper_cn["Close"].pct_change(10).iloc[-1]
-
-    # --- Volatility filter ---
     copper_vol = copper_cn["Close"].pct_change().rolling(10).std().iloc[-1]
 
-    # --- Scoring logic ---
-    step2_score = 0.0
+    # --- NaN protection (THIS WAS MISSING) ---
+    if (
+        pd.isna(china_ret_10d)
+        or pd.isna(copper_ret_10d)
+        or pd.isna(copper_vol)
+    ):
+        st.warning("Insufficient China trend data — Step-2 neutral")
 
-    if china_ret_10d > 0.015:
-        step2_score += 0.15
-    elif china_ret_10d < -0.015:
-        step2_score -= 0.15
-
-    if copper_ret_10d > 0.05:
-        step2_score += 0.15
-    elif copper_ret_10d < -0.05:
-        step2_score -= 0.15
-
-    if copper_vol > 0.03:
-        step2_score -= 0.05  # inventory stress / instability
-
-    # --- Label ---
-    if step2_score > 0.15:
-        step2_label = "Supportive"
-    elif step2_score < -0.15:
-        step2_label = "Negative"
     else:
-        step2_label = "Mild Supportive"
+        step2_score = 0.0
 
-    step2_diag = (
-        f"China equity (10d): {china_ret_10d:.2%} | "
-        f"Copper trend (10d): {copper_ret_10d:.2%} | "
-        f"Volatility: {copper_vol:.4f}"
-    )
+        # --- China demand proxy ---
+        if china_ret_10d > 0.015:
+            step2_score += 0.15
+        elif china_ret_10d < -0.015:
+            step2_score -= 0.15
+
+        # --- Copper behavior ---
+        if copper_ret_10d > 0.05:
+            step2_score += 0.15
+        elif copper_ret_10d < -0.05:
+            step2_score -= 0.15
+
+        # --- Inventory / instability penalty ---
+        if copper_vol > 0.03:
+            step2_score -= 0.05
+
+        # --- Label ---
+        if step2_score > 0.15:
+            step2_label = "Supportive"
+        elif step2_score < -0.15:
+            step2_label = "Negative"
+        else:
+            step2_label = "Mild Supportive"
+
+        step2_diag = (
+            f"China equity (10d): {china_ret_10d:.2%} | "
+            f"Copper trend (10d): {copper_ret_10d:.2%} | "
+            f"Volatility: {copper_vol:.4f}"
+        )
 
 # --- Display ---
 st.markdown("### 📊 Step-2 Signals")
 st.write(step2_diag)
 
 st.markdown("### 🔍 Step-2 Verdict")
-st.success(step2_label) if step2_score > 0 else st.warning(step2_label)
+if step2_score > 0:
+    st.success(step2_label)
+elif step2_score < 0:
+    st.error(step2_label)
+else:
+    st.info(step2_label)
 
 st.write(f"**Step-2 Score:** `{step2_score:.2f}`")
 # ===============================
