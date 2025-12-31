@@ -1,72 +1,66 @@
-# ==============================
-# STEP 2: China Demand + Inventory Pressure (Price Proxies)
-# ==============================
-
-import yfinance as yf
 import numpy as np
-import streamlit as st
+import yfinance as yf
 
-st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
+def run_step2():
+    """
+    Step 2: China Demand + Inventory Pressure
+    Returns: (step2_score, label, diagnostics_dict)
+    """
 
-# --- Download data ---
-china_eq = yf.download("FXI", period="3mo", progress=False)
-copper_px = yf.download("HG=F", period="3mo", progress=False)
+    # --- Download data ---
+    china_eq = yf.download("FXI", period="3mo", progress=False)
+    copper_px = yf.download("HG=F", period="3mo", progress=False)
 
-if len(china_eq) < 20 or len(copper_px) < 20:
-    st.error("Not enough China / Copper data for Step 2.")
-    st.stop()
+    if china_eq.empty or copper_px.empty or len(china_eq) < 20 or len(copper_px) < 20:
+        return 0.0, "Data unavailable", {}
 
-# ==============================
-# China Demand Signal
-# ==============================
-china_now = china_eq["Close"].iloc[-1]
-china_prev = china_eq["Close"].iloc[-10]
-china_return = (china_now - china_prev) / china_prev
+    # ----------------------------
+    # China demand proxy
+    # ----------------------------
+    china_now = float(china_eq["Close"].iloc[-1])
+    china_prev = float(china_eq["Close"].iloc[-10])
+    china_return = (china_now - china_prev) / china_prev
 
-china_score = np.clip(china_return / 0.05, -1, 1)
+    china_score = float(np.clip(china_return / 0.05, -1, 1))
 
-# ==============================
-# Inventory Pressure Proxy (Copper behavior)
-# ==============================
-returns = copper_px["Close"].pct_change().dropna()
-vol = returns.rolling(10).std().iloc[-1]
-price_trend = (copper_px["Close"].iloc[-1] -
-               copper_px["Close"].iloc[-10]) / copper_px["Close"].iloc[-10]
+    # ----------------------------
+    # Inventory pressure proxy
+    # ----------------------------
+    returns = copper_px["Close"].pct_change().dropna()
+    vol = float(returns.rolling(10).std().dropna().iloc[-1])
 
-if price_trend > 0 and vol < 0.02:
-    inventory_score = 0.5      # Tight supply
-elif price_trend < 0 and vol > 0.025:
-    inventory_score = -0.5     # Inventory pressure
-else:
-    inventory_score = 0.0      # Neutral
+    price_trend = float(
+        (copper_px["Close"].iloc[-1] - copper_px["Close"].iloc[-10])
+        / copper_px["Close"].iloc[-10]
+    )
 
-# ==============================
-# Final Step 2 Score
-# ==============================
-step2_score = 0.6 * china_score + 0.4 * inventory_score
+    if price_trend > 0 and vol < 0.02:
+        inventory_score = 0.5
+    elif price_trend < 0 and vol > 0.025:
+        inventory_score = -0.5
+    else:
+        inventory_score = 0.0
 
-# ==============================
-# Labels
-# ==============================
-if step2_score > 0.4:
-    label = "Strong Supportive"
-elif step2_score > 0.15:
-    label = "Mild Supportive"
-elif step2_score > -0.15:
-    label = "Neutral"
-elif step2_score > -0.4:
-    label = "Mild Pressure"
-else:
-    label = "Heavy Pressure"
+    # ----------------------------
+    # Final Step-2 score
+    # ----------------------------
+    step2_score = 0.6 * china_score + 0.4 * inventory_score
 
-# ==============================
-# Display
-# ==============================
-st.markdown("### 📊 Step 2 Signals")
-st.write(f"China Equity Change (10d): **{china_return*100:.2f}%**")
-st.write(f"Copper Price Trend (10d): **{price_trend*100:.2f}%**")
-st.write(f"Copper Volatility (10d): **{vol:.4f}**")
+    if step2_score > 0.4:
+        label = "Strong Supportive"
+    elif step2_score > 0.15:
+        label = "Mild Supportive"
+    elif step2_score > -0.15:
+        label = "Neutral"
+    elif step2_score > -0.4:
+        label = "Mild Pressure"
+    else:
+        label = "Heavy Pressure"
 
-st.markdown("### 🧭 Step 2 Verdict")
-st.success(f"**{label}**")
-st.write(f"Step 2 Score: **{step2_score:.2f}**")
+    diagnostics = {
+        "china_return": china_return,
+        "price_trend": price_trend,
+        "volatility": vol,
+    }
+
+    return float(step2_score), label, diagnostics
