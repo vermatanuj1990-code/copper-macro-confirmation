@@ -117,7 +117,76 @@ st.divider()
 st.subheader("🇨🇳 Step 2: China Demand & Inventory Pressure")
 
 step2_score, step2_label, step2_diag = run_step2()
+# =========================================================
+# STEP 3: MOMENTUM & EXHAUSTION ANALYSIS
+# =========================================================
+st.divider()
+st.header("⚡ Step 3: Momentum & Exhaustion")
 
+# --- RSI Calculation ---
+delta = copper["Close"].diff()
+gain = delta.clip(lower=0)
+loss = -delta.clip(upper=0)
+
+avg_gain = gain.rolling(14).mean()
+avg_loss = loss.rolling(14).mean()
+
+rs = avg_gain / avg_loss
+rsi = 100 - (100 / (1 + rs))
+rsi_latest = rsi.iloc[-1]
+
+# --- Momentum (Rate of Change) ---
+roc_10 = (copper["Close"].iloc[-1] - copper["Close"].iloc[-11]) / copper["Close"].iloc[-11]
+
+# --- Price Stretch ---
+ma20 = copper["Close"].rolling(20).mean().iloc[-1]
+stretch = (copper["Close"].iloc[-1] - ma20) / ma20
+
+# --- Scoring ---
+momentum_score = 0.0
+
+if rsi_latest > 70:
+    momentum_score -= 0.3
+    phase = "Exhaustion Risk"
+elif rsi_latest > 65:
+    momentum_score -= 0.1
+    phase = "Late Trend"
+elif rsi_latest > 55:
+    momentum_score += 0.15
+    phase = "Healthy Expansion"
+else:
+    momentum_score -= 0.1
+    phase = "Weak / Early"
+
+if stretch > 0.06:
+    momentum_score -= 0.2
+elif stretch < 0.03:
+    momentum_score += 0.1
+
+momentum_score = round(momentum_score, 2)
+
+# --- Verdict ---
+if momentum_score > 0.15:
+    verdict = "Expansion Phase – Buy on strength"
+elif momentum_score > 0:
+    verdict = "Healthy but Selective"
+elif momentum_score > -0.15:
+    verdict = "Late Trend – Buy on dips only"
+else:
+    verdict = "Exhaustion – Avoid fresh buys"
+
+# --- Display ---
+st.markdown(f"""
+**Momentum Phase:** {phase}  
+**RSI (14):** {rsi_latest:.1f}  
+**10-Day Momentum:** {roc_10*100:.2f}%  
+**Price Stretch from 20-DMA:** {stretch*100:.2f}%  
+
+### 🔎 Step-3 Verdict
+**{verdict}**  
+
+**Step-3 Score:** `{momentum_score}`
+""")
 st.write(f"**Step-2 Verdict:** {step2_label}")
 st.write(f"**Step-2 Score:** {step2_score:.2f}")
 
