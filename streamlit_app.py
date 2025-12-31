@@ -129,29 +129,32 @@ if copper.empty or len(copper) < 30:
     st.warning("Not enough copper data for momentum analysis.")
     st.stop()
 
-# RSI calculation
-delta = copper["Close"].diff()
-gain = delta.clip(lower=0)
-loss = -delta.clip(upper=0)
+# --- RSI (force scalar values) ---
+close = copper["Close"]
+
+delta = close.diff()
+gain = delta.where(delta > 0, 0.0)
+loss = -delta.where(delta < 0, 0.0)
 
 avg_gain = gain.rolling(14).mean()
 avg_loss = loss.rolling(14).mean()
 
 rs = avg_gain / avg_loss
-rsi = 100 - (100 / (1 + rs))
-rsi_latest = rsi.iloc[-1]
+rsi_series = 100 - (100 / (1 + rs))
 
-# Price stretch
-price_now = copper["Close"].iloc[-1]
-price_20 = copper["Close"].iloc[-20]
-stretch = (price_now - price_20) / price_20
+rsi_latest = float(rsi_series.iloc[-1])
 
-# Safety check
-if pd.isna(rsi_latest) or pd.isna(stretch):
+# --- Price stretch ---
+price_now = float(close.iloc[-1])
+price_20 = float(close.iloc[-20])
+stretch = float((price_now - price_20) / price_20)
+
+# --- Hard safety gate ---
+if np.isnan(rsi_latest) or np.isnan(stretch):
     st.warning("Momentum indicators not ready yet.")
     st.stop()
 
-# Scoring
+# --- Scoring logic ---
 step3_score = 0.0
 regime = "Neutral"
 
@@ -167,7 +170,7 @@ if stretch > 0.06:
 elif stretch < -0.05:
     step3_score += 0.15
 
-# Display
+# --- Display ---
 st.markdown("### 📊 Momentum Signals")
 st.write(f"RSI (14): {rsi_latest:.1f}")
 st.write(f"20-Day Price Stretch: {stretch*100:.2f}%")
