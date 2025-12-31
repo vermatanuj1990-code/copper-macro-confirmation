@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 import time
+import pandas as pd
 from step2_china_inventory import run_step2
 
 # -----------------------------
